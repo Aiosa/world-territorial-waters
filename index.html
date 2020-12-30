@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>World Territorial Waters (2013)</title>
+  <script type="text/javascript" src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://d3js.org/d3-selection-multi.v1.min.js"></script>
+  <link href="public/screen.css" rel="stylesheet">
+  <script type="text/javascript" src="public/eez_waters.js"></script>
+  <script type="text/javascript" src="public/colors.js"></script>
+
+</head>
+<body>
+<div id="menu">
+  <div style="display:flex">
+    <div id="menu-titles">
+      <!--<h1 class="text-ellipsis">World Territorial Waters (2013)</h1>-->
+      <select id="theme" onchange='switchMode(this.value); currentGraphViz();'>
+        <option value="base" selected>World Territorial Waters (2013)</option>
+        <option value="diff">World Territorial Waters (2008)</option>
+      </select>
+      <h1 id="title" class="text-ellipsis">World Waters</h1>
+    </div>
+    <div class="menu-separator"></div>
+    <div id="menu-filters" style="flex-grow: 3; display: flex">
+
+      <div style="height: 40px; ">
+          <span id="filters-title">
+          Graph settings
+        </span><br>
+        Filter EEZ Area below <span id="filter-area-value"></span> km<sup>2</sup>
+        <input type="range" class="filter-slider" id="filter-area-slider" style="transform:translate(0, -3px);">
+      </div>
+
+      <div style="margin-top: 10px; margin-left: 10px; min-width: 300px;max-width: 300px">
+        Stressors filters
+        [<a class="pointer" onclick='$(".stressors-checkbox").each(function() {$( this ).prop("checked", true); }); currentGraphViz();'>select all</a> /
+        <a class="pointer" onclick='$(".stressors-checkbox").each(function() {$( this ).prop("checked", false); }); currentGraphViz();'>deselect all</a>]
+        <div id="stressor-categories">
+
+        </div>
+
+      </div>
+
+
+
+      <div style="margin-top: 10px; margin-left: 15px;min-width: 300pxpx; max-width: 300px;   ">
+        Graph type
+        <!--option value stores attribute name, desc_comparator creates a comparator based on that name-->
+        <select id="graph-select" onchange='vizualize(this.value);'>
+          <option value="showBarChartSimpleViz">Bar Chart (sort STATE-INFO)</option>
+          <option value="showBarChartViz" selected>Comp. Bar Chart (sort STATE-INFO)</option>
+          <option value="showHierarchyViz">Hierarchical (node size STATE-INFO)</option>
+        </select>
+      </div>
+      <div style="margin-top: 10px; margin-left: 15px;min-width: 280px; max-width: 300px; flex-grow: 1;">
+        STATE-INFO: descending sort / node size
+        <!--option value stores attribute name, desc_comparator creates a comparator based on that name-->
+        <select id="sort-select" onchange='setSortComparator(this.value); currentGraphViz();'>
+          <option value="cumulative">Cumulative impact (weighted sum)</option>
+          <option value="sum">Average impact (unweighted sum)</option>
+          <option value="area">EEZ area size</option>
+          <option value="gdp2013">GDP in 2013</option>
+          <option value="gdp2008">GDP in 2008</option>
+          <option value="exp">Export in 2013</option>
+          <option value="imp">Import in 2013</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="map_div"></div>
+<div id="graph-show" style="filter: brightness(0.5);" >
+  <img src="public/graph.png" style="height: 80%; float: right; opacity: 0.8; margin-top: 5%; margin-right: 12px;">
+</div>
+<div id="selector"></div>
+<div id="legend"></div>
+<div id="color-selection"></div>
+<div id="color-open-close" style="filter: brightness(0.5);" onclick='
+      if ($(this).hasClass("active")) {
+        $(this).css("left", 0).css("filter", "brightness(0.5)");
+        $("#color-selection").css("left", "-320px");
+      } else {
+        $(this).css("left", "312px").css("filter", "");
+        $("#color-selection").css("left", 0);
+      }
+      $(this).toggleClass("active");
+'>
+  <img src="public/colors.png" style="height: 80%; float: right; opacity: 0.8; margin-top: 5%; margin-right: 12px;">
+</div>
+<div id="tooltip"></div>
+
+
+<div id="graph-container" style='position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); display: none;'>
+  <div id="graph">
+    <img src="public/close.png" id="close-graph" class="close-image" style="left: 8px;"/>
+    <span class="data-href" onclick='$("#info-container").css("display", "block");'>See detailed data description here.</span>
+    <div id="graph-data">
+
+    </div>
+  </div>
+</div>
+
+<div id="info-container" style='position:absolute; left:50%; top:50%; transform: translate(-50%, -50%); display: none;'>
+  <div id="info-panel">
+    <img src="public/close.png" onclick='$("#info-container").css("display", "none");' class="close-image" style="right: 8px" />
+
+    <h2>EEZ Areas</h2>
+    Most of the areas were taken from wikipedia.org. This data does not aim to be most precise, it is present rather for comparison and visualisation error avoidance - for filtering out very small areas that often have high stressor value. The notes about area size are following:
+    <ul><li>Approximation: only approximation value found in sources (e.g. New Zealand EEZ size published on gov site).</li>
+      <li>Rough approximation: the missing values were approximated using google map area calulator tool (by approximating the EEZ shape).</li></ul>
+
+    <h2>Monetary information</h2>
+    Economics data were taken from https://wits.worldbank.org/. Problem about this data is that underlying EEZs of certain state share the same value, and therefore are displayed in the same way (e.g. Hawai GDP is shown as USA GDP).
+
+    <h2>Sorting and comparison</h2>
+    Cumulative impact scores were computed based on weighted model (a weighted matrix for each stressor for each sea level category). Average impact scores are plain sum of individual stressors, present mainly for Bar Chart (will sort the bars by size). Bars length in the chart
+    does not allways approximate the cuulative score well, which is true for data in 2008, where some stressor categories are missing (and the cumulative score was based on more years and trend estimate).
+
+    <h2>Stressors: general model</h2>
+    Calculation of cumulative impacts followed and built on the approach developed previously<sup><a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR2">2</a>,<a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR6">6</a></sup>. Cumulative impact (IC) is the per-pixel average of the habitat vulnerability-weighted stressor intensities (see <a target="_blank" href="https://www.nature.com/articles/ncomms8615#MOESM168">Supplementary Table 1</a> for list of stressors and habitats), where weights (μi,j) are determined by the vulnerability of each i... m habitat (E) to each j... n stressor (D), such that:
+    <br><br>
+    <img src="public/formula.png" style="margin: 0 auto; display: block; padding: 12px; background: white">
+    <br>
+    In the previous global analyses<sup><a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR2">2</a></sup>, the sum of weighted intensities was used to account for the three-dimensionality of the ocean; here we calculate the average (following ref. 6) to produce a single two-dimensional map. The previous approach (and results) was not used for temporal comparisons (see ‘temporal comparisons’ below). We used ecosystem vulnerability weights (μi,j) developed previously<sup><a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR27">27</a></sup> for all stressor–habitat combinations, including new ones added here, as all stressor–habitat combinations were assessed in that study.
+
+    <h3>Habitat and stressor data</h3>
+    <p>For nearshore areas, we assumed benthic habitats are well-mixed with the water column above and so treat them as a single depth layer, as done elsewhere6. At depths >60 m, we treat the surface waters as a separate pelagic habitat, and at depths >200 m we assume three distinct depth layers (benthic, deep pelagic and surface pelagic). For offshore waters (>60-m depth), fully overlapping habitats from benthic and pelagic systems lead to imperfect representations of three-dimensional impact in a two-dimensional representation; in nearshore coastal areas there is only a single depth layer, removing this issue.</p>
+
+    <p>We updated most stressor data layers used previously<sup><a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR2">2</a></sup>, and used newly developed or significantly improved data sources for four layers (nutrient and organic land-based pollution, commercial shipping and port volume, which is used for invasive species, and ocean-based pollution), as well as data for two stressors new to this analysis (light pollution and sea level rise; see <a target="_blank" href="https://www.nature.com/articles/ncomms8615#MOESM168">Supplementary Table 1</a> for full list of data). The only data layers that could not be updated were inorganic pollution from land-based sources, artisanal fishing and ocean acidification, and thus in those cases we used the exact same data as used in the previous analyses. Habitat data are infrequently updated and improved, and so all of the habitat data remain the same as those used previously<sup><a href="https://www.nature.com/articles/ncomms8615#ref-CR2">2</a></sup>. As such, changes in cumulative impact scores are entirely due to changes in stressor intensities.</p>
+
+    <h3>Normalization of stressor data</h3>
+    <p>We first log[X+1] transformed each stressor data layer, except benthic structures. Benthic structures were treated as binary data since an oil rig either exists or does not. The transformation of data appropriately reduces the effect of extreme outliers when rescaling the data to assign the relative impact of different levels of the anthropogenic stressors considered here<sup><a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR28">28</a></sup>. All data layers were then rescaled between 0 and 1, with the highest per-pixel transformed value for each stressor across either time period set=1. We rescaled data in this way to ensure comparability across time periods (that is, using the same reference point across time). If stressor intensities increase in the future beyond this reference value, then analyses across all years of analyses would need to be redone. Rescaling allows for direct comparison among drivers with dramatically different units of measurement.</p>
+
+    <h3>Temporal comparisons</h3>
+    <!--<p>We recalculated previous (2008) scores using updated methods to allow direct comparison with current (best available data as of 2013) results. Because some data sources were new or were developed using new methods that could not be applied to past data, we restricted temporal analyses to only those data layers that could be directly compared across time. This left 12 stressor layers and all habitat data (see <a target="_blank" href="https://www.nature.com/articles/ncomms8615#MOESM168">Supplementary Table 1</a>).</p>-->
+
+    <p>To help address potential management priorities, we classified each pixel as high, medium or low current (2013) cumulative impact and as increasing, no change and decreasing impact across the 5-year time frame of the study. High and low impact categories were classified as the top and bottom 25% of values, respectively, with all other values categorized as medium. This led to cutoff values of &gt;4.02 (high impact) and &lt;2.739 (low impact). Increasing and decreasing impact were similarly classified as the top and bottom 25% of values, respectively, with cutoff values of >0.602 (increasing) and <−0.045 (decreasing).</p>
+    <p>From <a target="_blank" href="https://www.nature.com/articles/ncomms8615#ref-CR6">https://www.nature.com/articles/ncomms8615#ref-CR6</a>.</p>
+  </div>
+</div>
+</body>
+</html>
