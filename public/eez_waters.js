@@ -759,6 +759,7 @@ function init() {
 
                 item.node = svg.select("#" + item.id);
                 item.name = item.node.attr("name");
+
                 let keys = findInHierarchyByEezId(item.id);
                 if(keys.length == 2) {
                     item.parent_state = d3.select("#" + keys[1].substring(4));
@@ -770,6 +771,11 @@ function init() {
                     item.parent_eez = d3.select("#" + keys[1]);
                     hierarchy[keys[0]][keys[1]][keys[2]] = item;
                 }
+
+                if (item.id == "EEZ-Prince_Edward_Islands") {
+                    console.log(item);
+                }
+
             }
             max_values.area = maxArea;
 
@@ -1608,13 +1614,24 @@ function zoomAtNodes(nodes) {
 
     for(var i = 0; i < nodes.length; i += 1) {
         setSelected(nodes[i]);
-        let nodebox = nodes[i].node().getBBox();
+        let nodebox = nodes[i].attr("transform") ? getBBoxTransformed(nodes[i].node()) : nodes[i].node().getBBox();
         if (box[0] > nodebox.x) box[0] = nodebox.x;
         if (box[1] > nodebox.y) box[1] = nodebox.y;
         if (box[2] < nodebox.x + nodebox.width) box[2] = nodebox.x + nodebox.width;
         if (box[3] < nodebox.y + nodebox.height) box[3] = nodebox.y + nodebox.height;
     }
     boxZoom({x:box[0], y:box[1], width:box[2]-box[0], height:box[3]-box[1]}, 40);
+}
+
+function getBBoxTransformed(element) {
+    var r = element.getBBox();
+    var p = element.ownerSVGElement.createSVGPoint();
+    p.x = r.x;
+    p.y = r.y;
+    p = p.matrixTransform(element.transform.baseVal.consolidate().matrix);
+    r.x = p.x;
+    r.y = p.y;
+    return r;
 }
 
 // zoom to show a bounding box, with optional additional padding as percentage of box size
