@@ -10,7 +10,6 @@ function switchMode(newMode) {
             stressor_categories = diff_stressor_categories;
             stressor_keys = diff_stressor_keys;
             stressors = diff_stressors;
-
             break;
         case "base":
         default:
@@ -65,6 +64,7 @@ function vizualize(type) {
         case "showBarChartViz":
         default:
             currentGraphViz = showBarChart;
+            break;
     }
     currentGraphViz();
 }
@@ -948,7 +948,20 @@ function filterNsort() {
     // sort
     inputData = inputData.sort(desc_comparator(sort_comparator_attr));
 }
-
+var nodeSizeCalculator = updateMax;
+var nodeSizeCalculatorType = "max";
+function setNodeSizeCalculator(type) {
+    nodeSizeCalculatorType = type;
+    switch(type) {
+        case "sum":
+            nodeSizeCalculator = addIfDefined;
+            break;
+        case "max":
+        default:
+            nodeSizeCalculator = updateMax;
+            break;
+    }
+}
 function filterHierarchical() {  //no order - do not sort
     filterStressors();
 
@@ -979,8 +992,8 @@ function filterHierarchical() {  //no order - do not sort
                 if (continentstates[state].area >= area_low_limit) {
                     inputHierarchicalDataSize++;
                     sumNodeStressors(continentstates[state]);
-                    maxSortContinent = updateMax(maxSortContinent, continentstates[state][sort_comparator_attr]);
-                    maxSumContinent = updateMax(maxSumContinent, continentstates[state].sum);
+                    maxSortContinent = nodeSizeCalculator(maxSortContinent, continentstates[state][sort_comparator_attr]);
+                    maxSumContinent = nodeSizeCalculator(maxSumContinent, continentstates[state].sum);
 
                     continentstates[state].parent = continentObject;
                     children.push(continentstates[state]);
@@ -1000,8 +1013,8 @@ function filterHierarchical() {  //no order - do not sort
                     if (continentstates[state][eezKey].area >= area_low_limit) {
                         inputHierarchicalDataSize++;
                         sumNodeStressors(continentstates[state][eezKey]);
-                        maxSortState = updateMax(maxSortState, continentstates[state][eezKey][sort_comparator_attr]);
-                        maxSumState = updateMax(maxSumState, continentstates[state][eezKey].sum);
+                        maxSortState = nodeSizeCalculator(maxSortState, continentstates[state][eezKey][sort_comparator_attr]);
+                        maxSumState = nodeSizeCalculator(maxSumState, continentstates[state][eezKey].sum);
 
                         continentstates[state][eezKey].parent = stateObject;
                         eezChildren.push(continentstates[state][eezKey]);
@@ -1013,21 +1026,22 @@ function filterHierarchical() {  //no order - do not sort
                     stateObject.name = eezChildren[0].state;
                     stateObject.maxSort = maxSortState;
                     stateObject.maxSum = maxSumState;
-                    maxSortContinent = updateMax(maxSortContinent, maxSortState);
-                    maxSumContinent = updateMax(maxSumContinent, maxSumState);
+                    maxSortContinent = nodeSizeCalculator(maxSortContinent, maxSortState);
+                    maxSumContinent = nodeSizeCalculator(maxSumContinent, maxSumState);
                     children.push(stateObject);
                 }
             }
         }
         continentObject.maxSort = maxSortContinent;
         continentObject.maxSum = maxSumContinent;
-        maxSortWorld = updateMax(maxSortWorld, maxSortContinent);
-        maxSumWorld = updateMax(maxSumWorld, maxSumContinent);
+        maxSortWorld = nodeSizeCalculator(maxSortWorld, maxSortContinent);
+        maxSumWorld = nodeSizeCalculator(maxSumWorld, maxSumContinent);
         rootChildren.push(continentObject);
     }
     inputHierarchicalData.maxSort = maxSortWorld;
     inputHierarchicalData.maxSum = maxSumWorld;
     max_values.sum = maxSumWorld;
+    max_values.sort = maxSortWorld;
 }
 
 function sumNodeStressors(nodeitem) {
@@ -1035,6 +1049,11 @@ function sumNodeStressors(nodeitem) {
     for (const stressor of stressors_keys_in_use) {
         nodeitem.sum += nodeitem[stressor];
     }
+}
+
+function addIfDefined(base, value) {
+    if (value === undefined) return base;
+    return base + value;
 }
 
 
@@ -1283,8 +1302,28 @@ function drawHierarchicalGraph(area) {
     var width = 800;
     var height = inputHierarchicalDataSize * 50;
 
-    var canvas = d3.select(area)
+    let sizeSelector = d3.select("#graph-modifiers")
         .html("")
+        .insert("select")
+        .on("change", function() {
+            setNodeSizeCalculator(d3.select(this).property("value"));
+            currentGraphViz();
+        });
+
+    let maxSelect = sizeSelector.append("option")
+        .property("value", "max");
+    let sumSelect = sizeSelector.append("option")
+        .property("value", "sum");
+    if (nodeSizeCalculatorType == "max") {
+        maxSelect.attr("selected", true);
+    } else {
+        sumSelect.attr("selected", true);
+    }
+    maxSelect.html("Node size: max");
+    sumSelect.html("Node size: sum");
+
+
+    var canvas = d3.select(area).html("")
         .append("svg")
         .attr("width", width)
         .attr("height", height)
@@ -1331,14 +1370,22 @@ function drawHierarchicalGraph(area) {
         .attr("stroke", "black")
         .style("stroke-width", 2)
         .attr("class", "pointer")
-        .on("mouseover", clickedNode => {
+        .on("mouseover", d => {
             let ruleset = sort_rules[sort_comparator_attr];
-
-            tooltip.html("Impact:&nbsp;" + clickedNode.data.sum +
-                (ruleset !== undefined ? "<br>" + ruleset["name"] + ":&nbsp;" +
-                    ruleset["formatter"](clickedNode.data[sort_comparator_attr]) : ""))
-                .style("display", "block");
-        }).on("mouseout", deselectedNode => {
+            if (isEezLeaf(d.data)) {
+                tooltip.html("Node: " + d.data.name + "<br>" +
+                    "Impact:&nbsp;" + d.data.sum +
+                    (ruleset !== undefined ? "<br>" + ruleset["name"] + ":&nbsp;" +
+                        ruleset["formatter"](d.data[sort_comparator_attr]) : ""))
+                    .style("display", "block");
+            } else {
+                tooltip.html("Node: " + d.data.name + "<br>" +
+                    "Impact (" + nodeSizeCalculatorType + "):&nbsp;" + d.data.maxSum +
+                    (ruleset !== undefined ? "<br>" + ruleset["name"] + " (" + nodeSizeCalculatorType + "):&nbsp;" +
+                        ruleset["formatter"](d.data.maxSort) : ""))
+                    .style("display", "block");
+            }
+        }).on("mouseout", d => {
             tooltip.style("display", "none");
         }).on("click", function(d) {
             if (isEezLeaf(d.data)) {
@@ -1362,7 +1409,7 @@ function graphNodeRadiusEvaluator(value, attrType) {
     if (sort_comparator_attr == current_cumulative)
         return Math.max(minNodeWidth, maxNodeWidth * (value / max_values.sum));
     if (value === undefined) return minNodeWidth;
-    return Math.max(minNodeWidth, maxNodeWidth * (value / max_values[sort_comparator_attr]));
+    return Math.max(minNodeWidth, maxNodeWidth * (value / max_values.sort));
 }
 
 //////////////////////////////////
