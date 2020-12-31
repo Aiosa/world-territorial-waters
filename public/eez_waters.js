@@ -591,6 +591,10 @@ function areaFormat(num) {
     return String(num).replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,') + " km<sup>2</sup>";
 }
 
+function roundTo5Dec(num) {
+    return Math.round(num * 10000) / 10000;
+}
+
 function isEezLeaf(node) {
     return node.node !== undefined;
 }
@@ -948,6 +952,8 @@ function filterNsort() {
     // sort
     inputData = inputData.sort(desc_comparator(sort_comparator_attr));
 }
+
+// sort node size evaluator, only for sort attributes (the max is impact - no sense in summing)
 var nodeSizeCalculator = updateMax;
 var nodeSizeCalculatorType = "max";
 function setNodeSizeCalculator(type) {
@@ -993,7 +999,7 @@ function filterHierarchical() {  //no order - do not sort
                     inputHierarchicalDataSize++;
                     sumNodeStressors(continentstates[state]);
                     maxSortContinent = nodeSizeCalculator(maxSortContinent, continentstates[state][sort_comparator_attr]);
-                    maxSumContinent = nodeSizeCalculator(maxSumContinent, continentstates[state].sum);
+                    maxSumContinent = updateMax(maxSumContinent, continentstates[state].sum);
 
                     continentstates[state].parent = continentObject;
                     children.push(continentstates[state]);
@@ -1014,7 +1020,7 @@ function filterHierarchical() {  //no order - do not sort
                         inputHierarchicalDataSize++;
                         sumNodeStressors(continentstates[state][eezKey]);
                         maxSortState = nodeSizeCalculator(maxSortState, continentstates[state][eezKey][sort_comparator_attr]);
-                        maxSumState = nodeSizeCalculator(maxSumState, continentstates[state][eezKey].sum);
+                        maxSumState = updateMax(maxSumState, continentstates[state][eezKey].sum);
 
                         continentstates[state][eezKey].parent = stateObject;
                         eezChildren.push(continentstates[state][eezKey]);
@@ -1027,7 +1033,7 @@ function filterHierarchical() {  //no order - do not sort
                     stateObject.maxSort = maxSortState;
                     stateObject.maxSum = maxSumState;
                     maxSortContinent = nodeSizeCalculator(maxSortContinent, maxSortState);
-                    maxSumContinent = nodeSizeCalculator(maxSumContinent, maxSumState);
+                    maxSumContinent = updateMax(maxSumContinent, maxSumState);
                     children.push(stateObject);
                 }
             }
@@ -1035,7 +1041,7 @@ function filterHierarchical() {  //no order - do not sort
         continentObject.maxSort = maxSortContinent;
         continentObject.maxSum = maxSumContinent;
         maxSortWorld = nodeSizeCalculator(maxSortWorld, maxSortContinent);
-        maxSumWorld = nodeSizeCalculator(maxSumWorld, maxSumContinent);
+        maxSumWorld = updateMax(maxSumWorld, maxSumContinent);
         rootChildren.push(continentObject);
     }
     inputHierarchicalData.maxSort = maxSortWorld;
@@ -1163,6 +1169,10 @@ function showBarChartPlain() {
 
 let barchart_size = 30;
 function drawBarChart(area, barDrawer) {
+
+    d3.select("#graph-modifiers")
+        .html(""); //clear if hierarchical did put some data
+
     let canvas = d3.select(area);
     canvas.html("");
 
@@ -1380,9 +1390,11 @@ function drawHierarchicalGraph(area) {
                     .style("display", "block");
             } else {
                 tooltip.html("Node: " + d.data.name + "<br>" +
-                    "Impact (" + nodeSizeCalculatorType + "):&nbsp;" + d.data.maxSum +
+                    "Impact (max):&nbsp;" + d.data.maxSum +
                     (ruleset !== undefined ? "<br>" + ruleset["name"] + " (" + nodeSizeCalculatorType + "):&nbsp;" +
-                        ruleset["formatter"](d.data.maxSort) : ""))
+                        ruleset["formatter"](d.data.maxSort) :
+                            (nodeSizeCalculatorType == "sum" ? "<br>Impact (sum): " + d.data.maxSort : "")
+                    ))
                     .style("display", "block");
             }
         }).on("mouseout", d => {
@@ -1407,7 +1419,7 @@ const maxNodeWidth = 50;
 const minNodeWidth = 2;
 function graphNodeRadiusEvaluator(value, attrType) {
     if (sort_comparator_attr == current_cumulative)
-        return Math.max(minNodeWidth, maxNodeWidth * (value / max_values.sum));
+        return Math.max(minNodeWidth, maxNodeWidth * (value / max_values.sort));
     if (value === undefined) return minNodeWidth;
     return Math.max(minNodeWidth, maxNodeWidth * (value / max_values.sort));
 }
